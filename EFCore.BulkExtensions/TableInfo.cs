@@ -88,9 +88,8 @@ namespace EFCore.BulkExtensions
             if (entityType == null)
                 throw new InvalidOperationException($"DbContext does not contain EntitySet for Type: { type.Name }");
 
-            var relationalData = entityType.Relational();
-            Schema = relationalData.Schema ?? "dbo";
-            TableName = relationalData.TableName;
+            Schema = entityType.GetSchema() ?? "dbo";
+            TableName = entityType.GetTableName();
             TempTableSufix = "Temp" + Guid.NewGuid().ToString().Substring(0, 8); // 8 chars of Guid as tableNameSufix to avoid same name collision with other tables
 
             bool AreSpecifiedUpdateByProperties = BulkConfig.UpdateByProperties?.Count() > 0;
@@ -109,14 +108,18 @@ namespace EFCore.BulkExtensions
             // timestamp/row version properties are only set by the Db, the property has a [Timestamp] Attribute or is configured in in FluentAPI with .IsRowVersion()
             // They can be identified by the columne type "timestamp" or .IsConcurrencyToken in combination with .ValueGenerated == ValueGenerated.OnAddOrUpdate
             string timestampDbTypeName = nameof(TimestampAttribute).Replace("Attribute", "").ToLower(); // = "timestamp";
-            var timeStampProperties = allProperties.Where(a => (a.IsConcurrencyToken && a.ValueGenerated == ValueGenerated.OnAddOrUpdate) || a.Relational().ColumnType == timestampDbTypeName);
-            TimeStampColumnName = timeStampProperties.FirstOrDefault()?.Relational().ColumnName; // can be only One
+            var timeStampProperties = allProperties.Where(a =>
+                (a.IsConcurrencyToken && a.ValueGenerated == ValueGenerated.OnAddOrUpdate) ||
+                a.GetColumnType() == timestampDbTypeName);
+            TimeStampColumnName = timeStampProperties.FirstOrDefault()?.GetColumnName(); // can be only One
             var allPropertiesExceptTimeStamp = allProperties.Except(timeStampProperties);
-            var properties = allPropertiesExceptTimeStamp.Where(a => a.Relational().ComputedColumnSql == null);
+            var properties = allPropertiesExceptTimeStamp.Where(a => a.GetComputedColumnSql() == null);
 
             // TimeStamp prop. is last column in OutputTable since it is added later with varbinary(8) type in which Output can be inserted
-            OutputPropertyColumnNamesDict = allPropertiesExceptTimeStamp.Concat(timeStampProperties).ToDictionary(a => a.Name, b => b.Relational().ColumnName.Replace("]", "]]")); // square brackets have to be escaped
-            ColumnNameContainsSquareBracket = allPropertiesExceptTimeStamp.Concat(timeStampProperties).Any(a => a.Relational().ColumnName.Contains("]"));
+            OutputPropertyColumnNamesDict = allPropertiesExceptTimeStamp.Concat(timeStampProperties)
+                .ToDictionary(a => a.Name, b => b.GetColumnName().Replace("]", "]]")); // square brackets have to be escaped
+            ColumnNameContainsSquareBracket = allPropertiesExceptTimeStamp.Concat(timeStampProperties)
+                .Any(a => a.GetColumnName().Contains("]"));
 
             bool AreSpecifiedPropertiesToInclude = BulkConfig.PropertiesToInclude?.Count() > 0;
             bool AreSpecifiedPropertiesToExclude = BulkConfig.PropertiesToExclude?.Count() > 0;
@@ -159,19 +162,20 @@ namespace EFCore.BulkExtensions
 
             if (loadOnlyPKColumn)
             {
-                PropertyColumnNamesDict = properties.Where(a => PrimaryKeys.Contains(a.Name)).ToDictionary(a => a.Name, b => b.Relational().ColumnName.Replace("]", "]]"));
+                PropertyColumnNamesDict = properties.Where(a => PrimaryKeys.Contains(a.Name))
+                    .ToDictionary(a => a.Name, b => b.GetColumnName().Replace("]", "]]"));
             }
             else
             {
-                PropertyColumnNamesDict = properties.ToDictionary(a => a.Name, b => b.Relational().ColumnName.Replace("]", "]]"));
-                ShadowProperties = new HashSet<string>(properties.Where(p => p.IsShadowProperty).Select(p => p.Relational().ColumnName));
+                PropertyColumnNamesDict = properties.ToDictionary(a => a.Name, b => b.GetColumnName().Replace("]", "]]"));
+                ShadowProperties = new HashSet<string>(properties.Where(p => p.IsShadowProperty()).Select(p => p.GetColumnName()));
                 foreach (var property in properties.Where(p => p.GetValueConverter() != null))
                 {
-                    string columnName = property.Relational().ColumnName;
+                    string columnName = property.GetColumnName();
                     ValueConverter converter = property.GetValueConverter();
                     ConvertibleProperties.Add(columnName, converter);
                 }
-                
+
                 if (HasOwnedTypes)  // Support owned entity property update. TODO: Optimize
                 {
                     foreach (var navgationProperty in ownedTypes)
@@ -190,7 +194,7 @@ namespace EFCore.BulkExtensions
                         {
                             if (!ownedEntityProperty.IsPrimaryKey())
                             {
-                                string columnName = ownedEntityProperty.Relational().ColumnName;
+                                string columnName = ownedEntityProperty.GetColumnName();
                                 ownedEntityPropertyNameColumnNameDict.Add(ownedEntityProperty.Name, columnName);
                             }
                         }
@@ -220,7 +224,7 @@ namespace EFCore.BulkExtensions
                             }
                         }
                     }
-                 }
+                }
             }
         }
 
@@ -229,7 +233,8 @@ namespace EFCore.BulkExtensions
             sqlBulkCopy.DestinationTableName = InsertToTempTable ? FullTempTableName : FullTableName;
             sqlBulkCopy.BatchSize = BulkConfig.BatchSize;
             sqlBulkCopy.NotifyAfter = BulkConfig.NotifyAfter ?? BulkConfig.BatchSize;
-            sqlBulkCopy.SqlRowsCopied += (sender, e) => {
+            sqlBulkCopy.SqlRowsCopied += (sender, e) =>
+            {
                 progress?.Invoke((decimal)(e.RowsCopied * 10000 / entities.Count) / 10000); // round to 4 decimal places
             };
             sqlBulkCopy.BulkCopyTimeout = BulkConfig.BulkCopyTimeout ?? sqlBulkCopy.BulkCopyTimeout;
@@ -507,7 +512,7 @@ namespace EFCore.BulkExtensions
             }
             if (BulkConfig.CalculateStats)
             {
-                string sqlQueryCount =  SqlQueryBuilder.SelectCountIsUpdateFromOutputTable(this);
+                string sqlQueryCount = SqlQueryBuilder.SelectCountIsUpdateFromOutputTable(this);
 
                 int numberUpdated = GetNumberUpdated(context);
                 BulkConfig.StatsInfo = new StatsInfo
@@ -536,7 +541,7 @@ namespace EFCore.BulkExtensions
                 };
             }
         }
-        
+
         protected IEnumerable<T> QueryOutputTable<T>(DbContext context, string sqlQuery) where T : class
         {
             var compiled = EF.CompileQuery(GetQueryExpression<T>(sqlQuery));
@@ -544,7 +549,7 @@ namespace EFCore.BulkExtensions
             return result;
         }
 
-        protected IAsyncEnumerable<T> QueryOutputTableAsync<T>(DbContext context, string sqlQuery) where T : class
+        protected AsyncEnumerable<T> QueryOutputTableAsync<T>(DbContext context, string sqlQuery) where T : class
         {
             var compiled = EF.CompileAsyncQuery(GetQueryExpression<T>(sqlQuery));
             var result = compiled(context);

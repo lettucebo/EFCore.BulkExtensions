@@ -300,7 +300,7 @@ namespace EFCore.BulkExtensions
                         int lastRowId = (int)lastRowIdScalar;
                         var accessor = TypeAccessor.Create(typeof(T), true);
                         string identityPropertyName = tableInfo.PropertyColumnNamesDict.SingleOrDefault(a => a.Value == tableInfo.IdentityColumnName).Key;
-                        for (int i = entities.Count -1; i >= 0; i--)
+                        for (int i = entities.Count - 1; i >= 0; i--)
                         {
                             accessor[entities[i], identityPropertyName] = lastRowId;
                             lastRowId--;
@@ -398,7 +398,7 @@ namespace EFCore.BulkExtensions
                     if (operationType != OperationType.Delete && tableInfo.BulkConfig.SetOutputIdentity && tableInfo.IdentityColumnName != null)
                     {
                         command.CommandText = SqlQueryBuilderSqlite.SelectLastInsertRowId();
-                        long lastRowIdScalar = (long) await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                        long lastRowIdScalar = (long)await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
                         int lastRowId = (int)lastRowIdScalar;
                         var accessor = TypeAccessor.Create(typeof(T), true);
                         string identityPropertyName = tableInfo.PropertyColumnNamesDict.SingleOrDefault(a => a.Value == tableInfo.IdentityColumnName).Key;
@@ -550,8 +550,7 @@ namespace EFCore.BulkExtensions
             {
                 if (entityPropertiesDict.ContainsKey(property.Name))
                 {
-                    var relational = entityPropertiesDict[property.Name].Relational();
-                    string columnName = relational.ColumnName;
+                    var columnName = entityPropertiesDict[property.Name].GetColumnName();
 
                     var isConvertible = tableInfo.ConvertibleProperties.ContainsKey(columnName);
                     var propertyType = isConvertible ? tableInfo.ConvertibleProperties[columnName].ProviderClrType : property.PropertyType;
@@ -581,7 +580,7 @@ namespace EFCore.BulkExtensions
                     {
                         if (!ownedEntityProperty.IsPrimaryKey())
                         {
-                            string columnName = ownedEntityProperty.Relational().ColumnName;
+                            string columnName = ownedEntityProperty.GetColumnName();
                             if (tableInfo.PropertyColumnNamesDict.ContainsValue(columnName))
                             {
                                 ownedEntityPropertyNameColumnNameDict.Add(ownedEntityProperty.Name, columnName);
@@ -620,7 +619,7 @@ namespace EFCore.BulkExtensions
 
                     if (entityPropertiesDict.ContainsKey(property.Name))
                     {
-                        string columnName = entityPropertiesDict[property.Name].Relational().ColumnName;
+                        string columnName = entityPropertiesDict[property.Name].GetColumnName();
                         if (tableInfo.ConvertibleProperties.ContainsKey(columnName))
                         {
                             propertyValue = tableInfo.ConvertibleProperties[columnName].ConvertToProvider.Invoke(propertyValue);
@@ -673,7 +672,7 @@ namespace EFCore.BulkExtensions
                 throw new NotSupportedException("Sqlite supports only UPSERT(analog for MERGE WHEN MATCHED) but does not have functionality to do: 'WHEN NOT MATCHED BY SOURCE THEN DELETE'" +
                                                 "What can be done is to read all Data, find rows that are not is input List, then with those do the BulkDelete.");
             }
-            else if(operationType == OperationType.Update)
+            else if (operationType == OperationType.Update)
             {
                 command.CommandText = SqlQueryBuilderSqlite.UpdateSetTable(tableInfo);
             }
@@ -691,8 +690,7 @@ namespace EFCore.BulkExtensions
             {
                 if (entityPropertiesDict.ContainsKey(property.Name))
                 {
-                    var relational = entityPropertiesDict[property.Name].Relational();
-                    string columnName = relational.ColumnName;
+                    var columnName = entityPropertiesDict[property.Name].GetColumnName();
                     var propertyType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
 
                     /*var sqliteType = SqliteType.Text; // "String" || "Decimal" || "DateTime"

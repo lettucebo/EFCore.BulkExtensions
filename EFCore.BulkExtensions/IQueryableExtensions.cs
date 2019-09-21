@@ -5,7 +5,6 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
@@ -48,7 +47,9 @@ namespace EFCore.BulkExtensions
             var queryCompiler = (QueryCompiler)QueryCompilerField.GetValue(query.Provider);
             var modelGenerator = (QueryModelGenerator)QueryModelGeneratorField.GetValue(queryCompiler);
             var parameterValues = new SimpleParameterValues();
-            var diagnosticsLogger = new DiagnosticsLogger<DbLoggerCategory.Query>(new LoggerFactory(), null, new DiagnosticListener("Temp"));
+            var diagnosticsLogger =
+                new DiagnosticsLogger<DbLoggerCategory.Query>(new LoggerFactory(), null,
+                    new DiagnosticListener("Temp"));
             var parameterExpression = modelGenerator.ExtractParameters(diagnosticsLogger, query.Expression, parameterValues);
             var queryModel = modelGenerator.ParseQuery(parameterExpression);
             var database = (IDatabase)DataBaseField.GetValue(queryCompiler);
