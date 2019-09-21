@@ -449,11 +449,11 @@ namespace EFCore.BulkExtensions
                     Expression<Func<DbContext, IQueryable<T>>> expression = null;
                     if (tableInfo.BulkConfig.TrackingEntities)
                     {
-                        expression = (ctx) => ctx.Set<T>().FromSql(sqlQuery);
+                        expression = (ctx) => ctx.Set<T>().FromSqlRaw(sqlQuery);
                     }
                     else
                     {
-                        expression = (ctx) => ctx.Set<T>().FromSql(sqlQuery).AsNoTracking();
+                        expression = (ctx) => ctx.Set<T>().FromSqlRaw(sqlQuery).AsNoTracking();
                     }
 
                     var compiled = EF.CompileQuery(expression); // instead using Compiled queries
@@ -501,11 +501,11 @@ namespace EFCore.BulkExtensions
                     Expression<Func<DbContext, IQueryable<T>>> expression = null;
                     if (tableInfo.BulkConfig.TrackingEntities)
                     {
-                        expression = (ctx) => ctx.Set<T>().FromSql(sqlQuery);
+                        expression = (ctx) => ctx.Set<T>().FromSqlRaw(sqlQuery);
                     }
                     else
                     {
-                        expression = (ctx) => ctx.Set<T>().FromSql(sqlQuery).AsNoTracking();
+                        expression = (ctx) => ctx.Set<T>().FromSqlRaw(sqlQuery).AsNoTracking();
                     }
                     var compiled = EF.CompileAsyncQuery(expression);
                     var existingEntities = (await compiled(context).ToListAsync(cancellationToken).ConfigureAwait(false));
@@ -515,7 +515,9 @@ namespace EFCore.BulkExtensions
                 finally
                 {
                     if (!tableInfo.BulkConfig.UseTempDB)
-                        await context.Database.ExecuteSqlCommandAsync(SqlQueryBuilder.DropTable(tableInfo.FullTempTableName), cancellationToken).ConfigureAwait(false);
+                        await context.Database
+                            .ExecuteSqlRawAsync(SqlQueryBuilder.DropTable(tableInfo.FullTempTableName),
+                                cancellationToken).ConfigureAwait(false);
                 }
             }
             // -- Sqlite --

@@ -11,7 +11,6 @@ using System.Threading.Tasks;
 using FastMember;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -545,7 +544,7 @@ namespace EFCore.BulkExtensions
             return result;
         }
 
-        protected AsyncEnumerable<T> QueryOutputTableAsync<T>(DbContext context, string sqlQuery) where T : class
+        protected IAsyncEnumerable<T> QueryOutputTableAsync<T>(DbContext context, string sqlQuery) where T : class
         {
             var compiled = EF.CompileAsyncQuery(GetQueryExpression<T>(sqlQuery));
             var result = compiled(context);
@@ -557,11 +556,11 @@ namespace EFCore.BulkExtensions
             Expression<Func<DbContext, IQueryable<T>>> expression = null;
             if (BulkConfig.TrackingEntities) // If Else can not be replaced with Ternary operator for Expression
             {
-                expression = (ctx) => ctx.Set<T>().FromSql(sqlQuery);
+                expression = (ctx) => ctx.Set<T>().FromSqlRaw(sqlQuery);
             }
             else
             {
-                expression = (ctx) => ctx.Set<T>().FromSql(sqlQuery).AsNoTracking();
+                expression = (ctx) => ctx.Set<T>().FromSqlRaw(sqlQuery).AsNoTracking();
             }
             var ordered = OrderBy(expression, PrimaryKeys[0]);
 
